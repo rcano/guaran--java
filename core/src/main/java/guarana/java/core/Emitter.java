@@ -1,6 +1,7 @@
 package guarana.java.core;
 
 import io.vavr.CheckedConsumer;
+import java.lang.ref.WeakReference;
 
 /**
  *
@@ -10,6 +11,18 @@ public record Emitter<T, Container>(EmitterDescr<T, Container> emitterDescr, Con
 
     public void connect(EventIterator<T> it) {
         emitterDescr.connect(it, instance);
+    }
+
+    public ObsVal<T, Container> toVar(T initialValue, EventIterator<T> iterator) {
+        VarDescr<T, Container> descr = VarDescr.create("emitter-var", initialValue, false);
+        var res = descr.forInstance(instance);
+
+        // in order to not leak an eventIterator and the var, we'll create a weak reference to it so that when users stop using it, we stop updating it.
+        var weakRef = new WeakReference<>(res);
+        
+        connect(EventIterator.all.takeWhile(_ -> !weakRef.refersTo(null)).foreach(v ->
+                descr.valueForInstance(instance, new Binding.Const<>(v))));
+        return res;
     }
 
     /**

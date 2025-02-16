@@ -11,7 +11,7 @@
     <packaging>jar</packaging>
     <properties>
         <maven.compiler.release>24</maven.compiler.release>
-        <exec.mainClass>guarana.java.swing.Swing</exec.mainClass>
+        <exec.vmArgs>--enable-preview</exec.vmArgs>
     </properties>
     
     <build>

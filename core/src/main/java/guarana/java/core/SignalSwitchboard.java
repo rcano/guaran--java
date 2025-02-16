@@ -1,8 +1,8 @@
 package guarana.java.core;
 
+import io.vavr.control.Option;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.agrona.collections.Long2ObjectHashMap;
@@ -12,14 +12,14 @@ import org.jspecify.annotations.Nullable;
 interface SignalSwitchboard {
 
     public default <T, Container> T get(ObsValDescr<T, Container> var, Container instance) {
-        return getOpt(var, instance).orElseThrow();
+        return getOpt(var, instance).get();
     }
 
-    public <T, Container> Optional<T> getOpt(ObsValDescr<T, Container> var, Container instance);
+    public <T, Container> Option<T> getOpt(ObsValDescr<T, Container> var, Container instance);
 
     public default <T, Container> T getOrElseUpdate(VarDescr<T, Container> var, Container instance, Supplier<T> initialVlaue) {
         var prev = getOpt(var, instance);
-        if (prev.isPresent()) return prev.get();
+        if (prev.isDefined()) return prev.get();
 
         var res = initialVlaue.get();
         update(var, instance, res);
@@ -71,16 +71,16 @@ class SignalSwitchboardImpl implements SignalSwitchboard {
     }
 
     @Override
-    public <T, Container> Optional<T> getOpt(ObsValDescr<T, Container> var, Container instance) {
+    public <T, Container> Option<T> getOpt(ObsValDescr<T, Container> var, Container instance) {
         return switch (signalStates.get(Internals.keyed(var, instance))) {
             case null ->
-                Optional.empty();
+                Option.none();
             case State.Value(Object value) ->
-                Optional.of((T) value);
+                Option.some((T) value);
             case State.Recompute(Object oldValue) ->
-                Optional.of(recompute(var, instance, (T) oldValue));
+                Option.some(recompute(var, instance, (T) oldValue));
             case State.External.INSTANCE ->
-                Optional.of(((ExternalVarDescr<T, Container>) var).get(instance));
+                Option.some(((ExternalVarDescr<T, Container>) var).get(instance));
         };
     }
 
@@ -186,7 +186,7 @@ class SignalSwitchboardImpl implements SignalSwitchboard {
     public <T, Container> void bind(VarDescr<T, Container> var, Container instance, Function<SignalSwitchboard, T> f) {
         var keyed = Internals.keyed(var, instance);
         unbindPrev(keyed);
-        signalStates.put(keyed, new State.Recompute(getOpt(var, instance).orElse(null)));
+        signalStates.put(keyed, new State.Recompute(getOpt(var, instance).getOrNull()));
         signalEvaluator.put(keyed, (Function) f);
         propagateSignal(var, instance);
     }
@@ -279,7 +279,7 @@ class SignalSwitchboardImpl implements SignalSwitchboard {
         }
 
         @Override
-        public <T, Container> Optional<T> getOpt(ObsValDescr<T, Container> var, Container instance) {
+        public <T, Container> Option<T> getOpt(ObsValDescr<T, Container> var, Container instance) {
             if (var != forSignal || instance != signalInstance) dependencies.add(Internals.keyed(var, instance));
             return SignalSwitchboardImpl.this.getOpt(var, instance);
         }

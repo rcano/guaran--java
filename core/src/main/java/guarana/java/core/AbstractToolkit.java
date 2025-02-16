@@ -2,11 +2,11 @@ package guarana.java.core;
 
 import guarana.java.core.util.Throwables;
 import guarana.java.core.util.Unique;
+import io.vavr.control.Option;
 import java.lang.ref.Cleaner;
 import java.lang.ref.WeakReference;
 import java.util.AbstractMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import org.agrona.collections.Int2NullableObjectHashMap;
@@ -186,7 +186,7 @@ public abstract class AbstractToolkit {
         @Override
         public <T, Container> T get(ObsValDescr<T, Container> val, Container instance) {
             recordVardUsage(val, instance);
-            return signalSwitchboard.getOpt(val, instance).orElseGet(() -> stylist.apply(getMetrics(), val, instance).orElseGet(() ->
+            return signalSwitchboard.getOpt(val, instance).getOrElse(() -> stylist.apply(getMetrics(), val, instance).orElseGet(() ->
                     val.initialValueForInstance(instance)));
         }
 
@@ -236,14 +236,14 @@ public abstract class AbstractToolkit {
          * Reads the current value of an ObsVal as it is read by doing `descr.forInstance(instance).value()` (that is using the VarContext).
          */
         public <T, Container> T computed(ObsValDescr<T, Container> val, Container instance) {
-            return signalSwitchboard.getOpt(val, instance).orElseGet(() -> stylist.apply(getMetrics(), val, instance).orElseGet(() ->
+            return signalSwitchboard.getOpt(val, instance).getOrElse(() -> stylist.apply(getMetrics(), val, instance).orElseGet(() ->
                     val.initialValueForInstance(instance)));
         }
 
         /**
          * Reads the user-defined value for a variable, or the ObsValDescr default.
          */
-        public <T, Container> Optional<T> get(ObsValDescr<T, Container> descr, Container instance) {
+        public <T, Container> Option<T> get(ObsValDescr<T, Container> descr, Container instance) {
             return signalSwitchboard.getOpt(descr, instance);
         }
 
@@ -251,7 +251,7 @@ public abstract class AbstractToolkit {
          * Reads the user-defined value for a variable, if any.
          */
         public <T, Container> T getOrDefaul(ObsValDescr<T, Container> descr, Container instance) {
-            return signalSwitchboard.getOpt(descr, instance).orElseGet(() -> descr.initialValueForInstance(instance));
+            return signalSwitchboard.getOpt(descr, instance).getOrElse(() -> descr.initialValueForInstance(instance));
         }
     }
 }

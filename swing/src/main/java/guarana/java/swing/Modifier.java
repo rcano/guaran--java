@@ -1,8 +1,11 @@
 package guarana.java.swing;
 
 import guarana.java.core.Binding;
+import guarana.java.core.EmitterDescr;
+import guarana.java.core.EventIterator;
 import guarana.java.core.VarDescr;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -13,48 +16,59 @@ public interface Modifier<T, Container> {
 
     void apply(Container container);
 
-    public record VarSetter<T, Container>(VarDescr<T, Container> vd) {
+    public record VarSetter<T, Wrapper, Container>(VarDescr<T, Container> vd, Function<Wrapper, Container> unwrapper) {
 
-        public Modifier<T, Container> set(T value) {
+        public Modifier<T, Wrapper> set(T value) {
             return (container) -> {
-                vd.valueForInstance(container, new Binding.Const(value));
+                vd.valueForInstance(unwrapper.apply(container), new Binding.Const(value));
             };
         }
 
-        public Modifier<T, Container> bind(Supplier<T> f) {
+        public Modifier<T, Wrapper> bind(Supplier<T> f) {
             return (container) -> {
-                vd.valueForInstance(container, new Binding.Compute<>(f));
+                vd.valueForInstance(unwrapper.apply(container), new Binding.Compute<>(f));
             };
         }
 
-        public Modifier<T, Container> bind(Binding<T> value) {
+        public Modifier<T, Wrapper> bind(Binding<T> value) {
             return (container) -> {
-                vd.valueForInstance(container, value);
+                vd.valueForInstance(unwrapper.apply(container), value);
             };
         }
     }
 
-    public static <T, Container> VarSetter<T, Container> forVar(VarDescr<T, Container> v) {
-        return new VarSetter<>(v);
+    public static <T, Wrapper, Container> VarSetter<T, Wrapper, Container> forVar(VarDescr<T, Container> v, Function<Wrapper, Container> unwrapper) {
+        return new VarSetter<>(v, unwrapper);
     }
 
-    public static <T, Container> Modifier<T, Container> seq(Modifier<T, Container>... mods) {
+    public record EventIteratorSetter<T, Wrapper, Container>(EmitterDescr<T, Container> ed, Function<Wrapper, Container> unwrapper) {
+
+        public Modifier<T, Wrapper> connect(EventIterator<T> it) {
+            return c -> ed.connect(it, unwrapper.apply(c));
+        }
+    }
+
+    public static <T, Wrapper, Container> EventIteratorSetter<T, Wrapper, Container> forEmitter(EmitterDescr<T, Container> ed, Function<Wrapper, Container> unwrapper) {
+        return new EventIteratorSetter<>(ed, unwrapper);
+    }
+
+    public static <Container> Modifier<?, Container> seq(Modifier<?, Container>... mods) {
         return (container) -> {
-            for (Modifier<T, Container> mod : mods) {
+            for (Modifier<?, Container> mod : mods) {
                 mod.apply(container);
             }
         };
     }
 
-    public static <T, Container> Modifier<T, Container> seq(Iterable<Modifier<T, Container>> mods) {
+    public static <Container> Modifier<?, Container> seq(Iterable<Modifier<?, Container>> mods) {
         return (container) -> {
-            for (Modifier<T, Container> mod : mods) {
+            for (Modifier<?, Container> mod : mods) {
                 mod.apply(container);
             }
         };
     }
 
-    public static <T, Container> Modifier<T, Container> opt(Optional<Modifier<T, Container>> mod) {
+    public static <Container> Modifier<?, Container> opt(Optional<Modifier<?, Container>> mod) {
         return (container) -> {
             if (mod.isPresent()) mod.get().apply(container);
         };

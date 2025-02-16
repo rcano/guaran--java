@@ -20,15 +20,13 @@ import javax.swing.UIManager;
 public class Toolkit extends AbstractToolkit {
 
     public static Toolkit INSTANCE = new Toolkit();
-    public final Var<Double, ?> emSize = Var.singleton("emSize", (double) DesktopEnvironmentInfo.fontDeterminedByOs.get().map(f ->
-            (double) f.getSize2D()).getOrElse(14.0), false);
+    public final Var<Float, ?> emSize = Var.singleton("emSize", DesktopEnvironmentInfo.fontDeterminedByOs.get().map(f ->
+            f.getSize2D()).getOrElse(14.0f), false);
     public final Var<Stylist.Metrics, ?> sysMetrics = Var.singleton("sysMetrics", Stylist.Metrics.Empty, false);
 
     private final Map<String, ExternalObsValDescr<?, ?>> uidefaultsObsVals = new HashMap<>();
 
     private Toolkit() {
-        UIManager.getDefaults().addPropertyChangeListener(uiDefaultsChangeListener.INSTANCE);
-
         var fontMetrics = new Stylist.FontMetrics() {
             private JPanel peer = new JPanel();
 
@@ -50,6 +48,9 @@ public class Toolkit extends AbstractToolkit {
 
         update(() -> {
             sysMetrics.bind(() -> new Stylist.Metrics(emSize.value(), -1, -1, fontMetrics));
+            
+            // we only want to register the uiDefaultsChangeListener after the Toolkit.INSTANCE is fully instantiated. so we place this in an update call, which happens in the next swing tick.
+            UIManager.getDefaults().addPropertyChangeListener(uiDefaultsChangeListener.INSTANCE);
         });
     }
 
@@ -91,14 +92,21 @@ public class Toolkit extends AbstractToolkit {
         }
     }
 
+    @Override
+    public swingStateReader stateReader() {
+        return new swingStateReader();
+    }
+    
+    
+
     class swingStateReader extends stateReader {
 
         private swingStateReader() {
 
         }
 
-        public double emSize() {
-            return getOrDefaul((ObsValDescr<Double, Object>) emSize.varDescr(), emSize.instance());
+        public float emSize() {
+            return getOrDefaul((ObsValDescr<Float, Object>) emSize.varDescr(), emSize.instance());
         }
     }
 }
