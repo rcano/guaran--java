@@ -19,6 +19,11 @@ public class SignalsTest {
             r.run();
         }
 
+        @Override
+        public Stylist.Metrics getMetrics() {
+            return Stylist.Metrics.Empty;
+        }
+
     }
 
     final Toolkit tk = new Toolkit();

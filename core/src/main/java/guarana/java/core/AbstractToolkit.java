@@ -6,6 +6,7 @@ import java.lang.ref.Cleaner;
 import java.lang.ref.WeakReference;
 import java.util.AbstractMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import org.agrona.collections.Int2NullableObjectHashMap;
@@ -21,6 +22,7 @@ public abstract class AbstractToolkit {
 
     static AbstractToolkit INSTANCE;
     private SignalSwitchboard signalSwitchboard;
+    private EmittersStation emittersStation;
 
     private record InstanceData(WeakReference<Object> instance, IntHashSet vars, IntHashSet emitters) {
 
@@ -30,6 +32,8 @@ public abstract class AbstractToolkit {
     private final Int2ObjectHashMap<ObsValDescr<?, ?>> seenVars = new Int2NullableObjectHashMap<>();
     private final Cleaner cleaner = Cleaner.create();
     private final LongHashSet reactingExtVars = new LongHashSet(16);
+
+    public Stylist stylist = Stylist.NoOp.INSTANCE;
 
     public AbstractToolkit() {
 
@@ -74,7 +78,8 @@ public abstract class AbstractToolkit {
                 final ObsValDescr<Object, Object> varPart = (ObsValDescr<Object, Object>) seenVars.get(Internals.keyPart(key));
                 if (varPart == null) throw new IllegalStateException("We've never observed the var " + Internals.keyPart(key));
                 final var instanceData = instancesData.get(Internals.instancePart(key));
-                if (instanceData == null) throw new IllegalStateException("We've never observed the instance " + Internals.instancePart(key));
+                if (instanceData == null)
+                    throw new IllegalStateException("We've never observed the instance " + Internals.instancePart(key));
 
                 return new AbstractMap.SimpleImmutableEntry<>(varPart, instanceData.instance.get());
             }
@@ -82,11 +87,14 @@ public abstract class AbstractToolkit {
         };
 
         signalSwitchboard = new SignalSwitchboardImpl(reporter, varLookup, true);
+        emittersStation = new EmittersStationImpl();
     }
 
     protected abstract boolean isToolkitThread();
 
     protected abstract void runOnToolkitThread(Runnable r);
+    
+    public abstract Stylist.Metrics getMetrics();
 
     public void update(Runnable thunk) {
         update(() -> {
@@ -103,7 +111,8 @@ public abstract class AbstractToolkit {
         final var res = new CompletableFuture<R>();
         final Runnable action = () -> {
             try {
-                var r = ScopedValue.getWhere(VarContext.CONTEXT, new VarContextImpl(signalSwitchboard), thunk);
+                var r = VarContext.CONTEXT.isBound() ? thunk.get() : ScopedValue.where(VarContext.CONTEXT, new VarContextImpl(signalSwitchboard)).call(() ->
+                        thunk.get());
                 res.complete(r);
             } catch (Throwable e) {
                 Throwables.rethrowIfFatal(e);
@@ -177,7 +186,8 @@ public abstract class AbstractToolkit {
         @Override
         public <T, Container> T get(ObsValDescr<T, Container> val, Container instance) {
             recordVardUsage(val, instance);
-            return signalSwitchboard.getOpt(val, instance).orElseGet(() -> val.initialValueForInstance(instance)); // TODO: add stylist
+            return signalSwitchboard.getOpt(val, instance).orElseGet(() -> stylist.apply(getMetrics(), val, instance).orElseGet(() ->
+                    val.initialValueForInstance(instance)));
         }
 
         @Override
@@ -187,7 +197,8 @@ public abstract class AbstractToolkit {
                 case Binding.Const<T>(T value) ->
                     signalSwitchboard.update(var, instance, value);
                 case Binding.Compute<T>(Supplier<T> c) ->
-                    signalSwitchboard.bind(var, instance, sb -> ScopedValue.getWhere(VarContext.CONTEXT, new VarContextImpl(sb), c));
+                    signalSwitchboard.bind(var, instance, sb -> ScopedValue.where(VarContext.CONTEXT, new VarContextImpl(sb)).call(() ->
+                            c.get()));
             };
         }
 
@@ -199,5 +210,48 @@ public abstract class AbstractToolkit {
             }
         }
 
+        @Override
+        public <T, Container> void connectEmitter(EmitterDescr<T, Container> emitterDescr, EventIterator<T> it, Container instance) {
+            recordInstance(instance).emitters().add(emitterDescr.uniqueId());
+            emittersStation.listen(emitterDescr, instance, it);
+        }
+
+        @Override
+        public <T, Container> void emit(EmitterDescr<T, Container> emitterDescr, T elem, Container instance) {
+            recordInstance(instance).emitters().add(emitterDescr.uniqueId());
+            emittersStation.emit(emitterDescr, instance, elem);
+        }
+
+    }
+
+    public stateReader stateReader()  { return new stateReader(); }
+
+    public class stateReader {
+
+        protected stateReader() {
+
+        }
+
+        /**
+         * Reads the current value of an ObsVal as it is read by doing `descr.forInstance(instance).value()` (that is using the VarContext).
+         */
+        public <T, Container> T computed(ObsValDescr<T, Container> val, Container instance) {
+            return signalSwitchboard.getOpt(val, instance).orElseGet(() -> stylist.apply(getMetrics(), val, instance).orElseGet(() ->
+                    val.initialValueForInstance(instance)));
+        }
+
+        /**
+         * Reads the user-defined value for a variable, or the ObsValDescr default.
+         */
+        public <T, Container> Optional<T> get(ObsValDescr<T, Container> descr, Container instance) {
+            return signalSwitchboard.getOpt(descr, instance);
+        }
+
+        /**
+         * Reads the user-defined value for a variable, if any.
+         */
+        public <T, Container> T getOrDefaul(ObsValDescr<T, Container> descr, Container instance) {
+            return signalSwitchboard.getOpt(descr, instance).orElseGet(() -> descr.initialValueForInstance(instance));
+        }
     }
 }

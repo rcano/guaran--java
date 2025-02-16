@@ -10,6 +10,10 @@ public interface VarContext {
 
     public <T, Container> void externalPropertyUpdated(ObsValDescr<T, Container> val, Container instance, @Nullable T oldValue);
     
+    public <T, Container> void connectEmitter(EmitterDescr<T, Container> emitterDescr, EventIterator<T> it, Container instance);
+    
+    public <T, Container> void emit(EmitterDescr<T, Container> emitterDescr, T elem, Container instance);
+    
     static ScopedValue<VarContext> CONTEXT = ScopedValue.newInstance();
     
     static VarContext getContext() {

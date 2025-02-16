@@ -4,6 +4,8 @@ import java.util.function.Consumer;
 
 public interface VarDescr<T, Container> extends ObsValDescr<T, Container> {
 
+    public String name();
+
     public default void valueForInstance(Container instance, Binding<T> value) {
         VarContext.getContext().update(this, instance, value);
     }
@@ -21,6 +23,11 @@ public interface VarDescr<T, Container> extends ObsValDescr<T, Container> {
     public static <T, Container> VarDescr<T, Container> create(String name, T initialValue, boolean eagerEvaluation, Consumer<Object> onFirstAssociation) {
         return new VarDescr<>() {
             final int id = Internals.varsUniqueIdGen.getAndIncrement();
+
+            @Override
+            public String name() {
+                return name;
+            }
 
             @Override
             public boolean eagerEvaluation() {
@@ -46,8 +53,6 @@ public interface VarDescr<T, Container> extends ObsValDescr<T, Container> {
             public String toString() {
                 return "Var(" + name + ", " + initialValue + ", " + eagerEvaluation + ")";
             }
-            
-            
         };
     }
 }

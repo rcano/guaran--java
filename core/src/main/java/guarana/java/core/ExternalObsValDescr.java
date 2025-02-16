@@ -14,11 +14,19 @@ public interface ExternalObsValDescr<T, Container> extends ObsValDescr<T, Contai
 
     public static <T, Container> ExternalObsValDescr<T, Container> create(
             String name,
+            Function<Container, T> getter
+    ) {
+        return create(name, getter, ObsValDescr.DO_NOTHING);
+    }
+
+    public static <T, Container> ExternalObsValDescr<T, Container> create(
+            String name,
             Function<Container, T> getter,
             Consumer<Object> onFirstAssociation
     ) {
         return new ExternalObsValDescr<T, Container>() {
             private int id = Internals.varsUniqueIdGen.getAndIncrement();
+
             @Override
             public T get(Container owner) {
                 return getter.apply(owner);

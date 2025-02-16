@@ -1,6 +1,5 @@
 package guarana.java.core;
 
-import guarana.java.core.util.Unique;
 import java.util.function.Supplier;
 
 /**
@@ -23,6 +22,10 @@ public record Var<T, Container>(VarDescr<T, Container> varDescr, Container insta
 
     public void bind(Supplier<T> f) {
         varDescr.valueForInstance(instance, new Binding.Compute<>(f));
+    }
+    
+    public void bind(Binding<T> b) {
+        varDescr.valueForInstance(instance, b);
     }
 
     /**

@@ -33,6 +33,11 @@ public interface ExternalVarDescr<T, Container> extends VarDescr<T, Container>, 
             final int id = Internals.varsUniqueIdGen.getAndIncrement();
 
             @Override
+            public String name() {
+                return name;
+            }
+            
+            @Override
             public T get(Container owner) {
                 return getter.apply(owner);
             }
